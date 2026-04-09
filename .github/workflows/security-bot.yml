@@ -9,7 +9,46 @@ jobs:
   pentest:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
       
-      - name: Run security check
-        run: echo "Security bot ready"
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Start application
+        run: |
+          npm install
+          npm run build 2>/dev/null || echo "No build script"
+          npm start & 2>/dev/null || echo "No start script"
+          sleep 10
+          # Запускаем простой сервер для теста
+          python3 -m http.server 3000 &
+          sleep 3
+      
+      - name: Install Claude Code
+        run: |
+          curl -fsSL https://claude.ai/download/install.sh | bash
+          echo "$HOME/.claude" >> $GITHUB_PATH
+          export PATH="$HOME/.claude:$PATH"
+      
+      - name: Install Pentest Plugin
+        run: |
+          export PATH="$HOME/.claude:$PATH"
+          claude plugin marketplace add Stickman230/claude-pentest
+          claude plugin install pentest@claude-pentest
+      
+      - name: Run Pentest Bot
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          export PATH="$HOME/.claude:$PATH"
+          echo "🤖 Security bot ready to hack!"
+          echo "In future: /pentest:pentest will run here"
+      
+      - name: Create Issues from findings
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 .github/scripts/create-issues.py

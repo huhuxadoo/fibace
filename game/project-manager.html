@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>FiBace Office - Live Development</title>
+    <style>
+        body { 
+            margin: 0; 
+            display: flex; 
+            min-height: 100vh; 
+            background: #0f0f1e;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            color: white;
+        }
+        #sidebar {
+            width: 350px;
+            background: #1a1a2e;
+            border-right: 2px solid #4a4a6a;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        #game-container {
+            flex: 1;
+            position: relative;
+        }
+        canvas { display: block; }
+        
+        .task-log {
+            background: #2a2a3e;
+            border-radius: 8px;
+            padding: 10px;
+            margin: 10px 0;
+            font-size: 12px;
+            border-left: 3px solid #4CAF50;
+        }
+        .task-log.working { border-left-color: #2196F3; }
+        .task-log.done { border-left-color: #4CAF50; }
+        .task-log.error { border-left-color: #f44336; }
+        
+        .file-created {
+            color: #4CAF50;
+            font-family: monospace;
+            background: rgba(76, 175, 80, 0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin: 2px 0;
+        }
+        
+        .agent-card {
+            background: #2a2a4e;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 10px 0;
+            border: 2px solid transparent;
+        }
+        .agent-card.active { border-color: #4CAF50; }
+        
+        h3 { margin-top: 0; color: #fff; }
+        .stats {
+            display: flex;
+            justify-content: space-between;
+            margin: 20px 0;
+            font-size: 14px;
+        }
+        .stat-box {
+            background: #2a2a4e;
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .stat-value { font-size: 24px; font-weight: bold; color: #4CAF50; }
+        
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+        }
+        button:hover { background: #45a049; }
+        button:disabled { background: #666; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <div id="sidebar">
+        <h3>🏢 FiBace Project Dashboard</h3>
+        <div class="stats">
+            <div class="stat-box">
+                <div class="stat-value" id="files-count">0</div>
+                <div>Файлов</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="progress-total">0%</div>
+                <div>Готово</div>
+            </div>
+        </div>
+        
+        <div style="margin: 20px 0;">
+            <button onclick="startSprint()">🚀 Начать Спринт</button>
+            <button onclick="pauseWork()">⏸️ Пауза</button>
+            <button onclick="resetProject()">🔄 Сбросить</button>
+        </div>
+        
+        <h3>📋 Задачи на сегодня:</h3>
+        <div id="task-list"></div>
+        
+        <h3>📝 Лог работы:</h3>
+        <div id="work-log" style="max-height: 400px; overflow-y: auto;"></div>
+    </div>
+    
+    <div id="game-container">
+        <canvas id="office" width="800" height="700"></canvas>
+    </div>
+
+    <script>
+        // Файловая система проекта (виртуальная, но можно сделать реальную)
+        let projectFiles = [];
+        let workPaused = false;
+        let sprintStarted = false;
+        
+        const TASKS = [
+            { id: 1, name: "ADR-001: Архитектура", agent: "Арчи", type: "doc", file: "docs/architecture/ADR-001.md", content: "# ADR-001: Выбор стека\n\n## Решение\nИспользуем Next.js + Node.js + PostgreSQL\n\n## Обоснование\n- SSR для SEO\n- TypeScript для типизации\n- PostgreSQL для надежности\n", status: "todo" },
+            
+            { id: 2, name: "Design System", agent: "Диззи", type: "code", file: "frontend/design-system/tokens.css", content: ":root {\n  --primary: #3498db;\n  --secondary: #2ecc71;\n  --glass: rgba(255,255,255,0.1);\n  --radius: 12px;\n}\n", status: "todo" },
+            
+            { id: 3, name: "API Gateway", agent: "Борис", type: "code", file: "backend/api/gateway.js", content: "const express = require('express');\nconst app = express();\n// API Gateway для FiBace\napp.use('/properties', require('./routes/properties'));\napp.use('/bookings', require('./routes/bookings'));\nmodule.exports = app;\n", status: "todo" },
+            
+            { id: 4, name: "Auth Service", agent: "Семен", type: "code", file: "backend/services/auth.js", content: "const jwt = require('jsonwebtoken');\nconst bcrypt = require('bcrypt');\n\n// Security middleware\nconst authMiddleware = (req, res, next) => {\n  const token = req.headers.authorization?.split(' ')[1];\n  if (!token) return res.status(401).json({ error: 'Unauthorized' });\n  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {\n    if (err) return res.status(403).json({ error: 'Invalid token' });\n    req.user = user;\n    next();\n  });\n};\n\nmodule.exports = authMiddleware;\n", status: "todo" },
+            
+            { id: 5, name: "Payment Module", agent: "Павел", type: "code", file: "backend/services/payments.js", content: "const stripe = require('stripe')(process.env.STRIPE_KEY);\n\nclass PaymentService {\n  async createSubscription(userId, plan) {\n    // Создание подписки для арендодателя\n    return await stripe.subscriptions.create({\n      customer: userId,\n      items: [{ price: plan === 'pro' ? 'price_pro' : 'price_basic' }],\n    });\n  }\n}\n\nmodule.exports = PaymentService;\n", status: "todo" },
+            
+            { id: 6, name: "Main Page", agent: "Федор", type: "code", file: "frontend/web/pages/index.tsx", content: "import React from 'react';\nimport { Header } from '../components/Header';\nimport { Dashboard } from '../components/Dashboard';\n\nexport default function Home() {\n  return (\n    <div className=\"min-h-screen bg-gradient-to-br from-blue-900 to-purple-900\">\n      <Header />\n      <Dashboard />\n    </div>\n  );\n}\n", status: "todo" },
+            
+            { id: 7, name: "Mobile App", agent: "Марк", type: "code", file: "mobile/App.tsx", content: "import React from 'react';\nimport { NavigationContainer } from '@react-navigation/native';\nimport { createStackNavigator } from '@react-navigation/stack';\nimport { HomeScreen } from './screens/Home';\n\nconst Stack = createStackNavigator();\n\nexport default function App() {\n  return (\n    <NavigationContainer>\n      <Stack.Navigator>\n        <Stack.Screen name=\"Home\" component={HomeScreen} />\n      </Stack.Navigator>\n    </NavigationContainer>\n  );\n}\n", status: "todo" },
+            
+            { id: 8, name: "Tests Setup", agent: "Тимофей", type: "code", file: "tests/unit/setup.test.js", content: "const { describe, it, expect } = require('@jest/globals');\nconst request = require('supertest');\nconst app = require('../backend/api/gateway');\n\ndescribe('FiBace API', () => {\n  it('should return 200 on health check', async () => {\n    const res = await request(app).get('/health');\n    expect(res.status).toBe(200);\n  });\n});\n", status: "todo" }
+        ];
+
+        // Агенты с навыками
+        const agents = [
+            { 
+                name: "Арчи", role: "Архитектор", color: "#9b59b6", 
+                x: 150, y: 150, desk: {x: 150, y: 150},
+                task: null, state: 'idle', progress: 0,
+                currentFile: null, typingSpeed: 2,
+                avatar: "🧙"
+            },
+            { 
+                name: "Диззи", role: "UI/UX", color: "#e91e63", 
+                x: 350, y: 150, desk: {x: 350, y: 150},
+                task: null, state: 'idle', progress: 0,
+                currentFile: null, typingSpeed: 3,
+                avatar: "🧚"
+            },
+            { 
+                name: "Борис", role: "Backend", color: "#27ae60", 
+                x: 150, y: 350, desk: {x: 150, y: 350},
+                task: null, state: 'idle', progress: 0,
+                currentFile: null, typingSpeed: 4,
+                avatar: "👨‍💻"
+            },
+            { 
+                name: "Федор", role: "Frontend", color: "#3498db", 
+                x: 350, y: 350, desk: {x: 350, y: 350},
+                task: null, state: 'idle', progress: 0,
+                currentFile: null, typingSpeed: 3,
+                avatar: "👨‍💻"
+            },
+            { 
+                name: "Семен", role: "Security", color: "#c0392b", 
+                x: 550, y: 350, desk: {x: 550, y: 350},
+                task: null, state: 'idle', progress: 0,
+                currentFile: null, typingSpeed: 3,
+                avatar: "🛡️"
+            },
+            { 
+                name: "Павел", role: "Payments", color: "#1abc9c", 
+                x: 200, y: 550, desk: {x: 200, y: 550},
+                task: null, state: 'idle', progress: 0,
+                currentFile: null, typingSpeed: 2,
+                avatar: "💰"
+            },
+            { 
+                name: "Марк", role: "Mobile", color: "#f39c12", 
+                x: 400, y: 550, desk: {x: 400, y: 550},
+                task: null, state: 'idle', progress: 0,
+                currentFile: null, typingSpeed: 3,
+                avatar: "📱"
+            },
+            { 
+                name: "Тимофей", role: "QA", color: "#95a5a6", 
+                x: 600, y: 550, desk: {x: 600, y: 550},
+                task: null, state: 'idle', progress: 0,
+                currentFile: null, typingSpeed: 2,
+                avatar: "🔍"
+            }
+        ];
+
+        const canvas = document.getElementById('office');
+        const ctx = canvas.getContext('2d');
+
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('work-log');
+            const entry = document.createElement('div');
+            entry.className = `task-log ${type}`;
+            entry.innerHTML = `<strong>${new Date().toLocaleTimeString()}</strong>: ${message}`;
+            logDiv.insertBefore(entry, logDiv.firstChild);
+        }
+
+        function updateTaskList() {
+            const list = document.getElementById('task-list');
+            list.innerHTML = TASKS.map(t => `
+                <div class="agent-card ${t.status === 'done' ? 'active' : ''}" style="border-color: ${t.status === 'done' ? '#4CAF50' : t.status === 'doing' ? '#2196F3' : '#666'}">
+                    <strong>${t.agent}</strong>: ${t.name}<br>
+                    <small style="color: ${t.status === 'done' ? '#4CAF50' : '#aaa'}">
+                        ${t.status === 'done' ? '✅ Готово' : t.status === 'doing' ? '🔄 В работе' : '⏳ Ожидает'}
+                    </small>
+                    ${t.status === 'doing' ? `<div style="background: #333; height: 4px; margin-top: 5px; border-radius: 2px;">
+                        <div style="background: #2196F3; height: 100%; width: ${getAgentByTask(t).progress}%"></div>
+                    </div>` : ''}
+                </div>
+            `).join('');
+            
+            document.getElementById('files-count').textContent = projectFiles.length;
+            const done = TASKS.filter(t => t.status === 'done').length;
+            document.getElementById('progress-total').textContent = Math.floor((done / TASKS.length) * 100) + '%';
+        }
+
+        function getAgentByTask(task) {
+            return agents.find(a => a.task && a.task.id === task.id) || {progress: 0};
+        }
+
+        function assignTask(agent) {
+            if (agent.task || workPaused) return;
+            
+            // Находим задачу для этого агента
+            const availableTask = TASKS.find(t => t.agent === agent.name && t.status === 'todo');
+            if (!availableTask) return;
+            
+            agent.task = availableTask;
+            agent.task.status = 'doing';
+            agent.state = 'walking';
+            agent.targetX = agent.desk.x;
+            agent.targetY = agent.desk.y;
+            
+            log(`${agent.name} получил задачу: ${availableTask.name}`, 'working');
+            updateTaskList();
+        }
+
+        function completeTask(agent) {
+            if (!agent.task) return;
+            
+            const task = agent.task;
+            task.status = 'done';
+            
+            // "Создаем" файл
+            projectFiles.push({
+                path: task.file,
+                content: task.content,
+                author: agent.name,
+                time: new Date().toISOString()
+            });
+            
+            log(`<span class="file-created">${agent.name} создал файл: ${task.file}</span>`, 'done');
+            
+            // Создаем реальный файл (можно включить)
+            // createRealFile(task.file, task.content);
+            
+            agent.task = null;
+            agent.state = 'idle';
+            agent.progress = 0;
+            
+            updateTaskList();
+            
+            // Небольшая задержка перед следующей задачей
+            setTimeout(() => assignTask(agent), 2000);
+        }
+
+        function createRealFile(path, content) {
+            // Эта функция может отправлять запрос на сервер или использовать File System Access API
+            // Для демо просто логируем
+            console.log(`Creating file: ${path}`);
+        }
+
+        function startSprint() {
+            sprintStarted = true;
+            workPaused = false;
+            log("🚀 Спринт начался! Команда FiBace приступает к работе.", 'done');
+            
+            agents.forEach(agent => {
+                setTimeout(() => assignTask(agent), Math.random() * 3000);
+            });
+        }
+
+        function pauseWork() {
+            workPaused = !workPaused;
+            log(workPaused ? "⏸️ Работа приостановлена" : "▶️ Работа возобновлена", 'info');
+        }
+
+        function resetProject() {
+            projectFiles = [];
+            TASKS.forEach(t => { t.status = 'todo'; });
+            agents.forEach(a => {
+                a.task = null;
+                a.state = 'idle';
+                a.progress = 0;
+            });
+            log("🔄 Проект сброшен. Готовы начать заново.", 'info');
+            updateTaskList();
+        }
+
+        // Главный игровой цикл
+        function update() {
+            if (workPaused) return;
+            
+            agents.forEach(agent => {
+                if (!agent.task) {
+                    // Ищем новую задачу время от времени
+                    if (Math.random() < 0.02) assignTask(agent);
+                    return;
+                }
+                
+                if (agent.state === 'walking') {
+                    const dx = agent.targetX - agent.x;
+                    const dy = agent.targetY - agent.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    
+                    if (dist > 5) {
+                        agent.x += (dx / dist) * 3;
+                        agent.y += (dy / dist) * 3;
+                    } else {
+                        agent.state = 'working';
+                        log(`${agent.name} сел за работу: ${agent.task.name}`, 'working');
+                    }
+                } else if (agent.state === 'working') {
+                    // Печатает код
+                    agent.progress += agent.typingSpeed;
+                    
+                    // Эффект печатания
+                    if (Math.random() < 0.1) {
+                        agent.y += Math.sin(Date.now() / 100) * 2;
+                    }
+                    
+                    if (agent.progress >= 100) {
+                        completeTask(agent);
+                    }
+                }
+            });
+        }
+
+        function draw() {
+            // Фон офиса
+            ctx.fillStyle = "#0f0f1e";
+            ctx.fillRect(0, 0, 800, 700);
+            
+            // Комнаты
+            const rooms = [
+                {x: 50, y: 50, w: 250, h: 200, name: "🏛️ Архитектура", color: "#2c3e50"},
+                {x: 320, y: 50, w: 250, h: 200, name: "🎨 Дизайн", color: "#2c3e50"},
+                {x: 50, y: 280, w: 250, h: 200, name: "🖥️ Backend", color: "#2c3e50"},
+                {x: 320, y: 280, w: 250, h: 200, name: "💻 Frontend", color: "#2c3e50"},
+                {x: 590, y: 280, w: 190, h: 200, name: "🔒 Security", color: "#2c3e50"},
+                {x: 50, y: 510, w: 350, h: 150, name: "☕ Кофе & DevOps", color: "#3a2a1e"},
+                {x: 420, y: 510, w: 360, h: 150, name: "🔍 QA & Mobile", color: "#2c3e50"}
+            ];
+            
+            rooms.forEach(room => {
+                ctx.fillStyle = room.color;
+                ctx.fillRect(room.x, room.y, room.w, room.h);
+                ctx.strokeStyle = "#4a4a6a";
+                ctx.lineWidth = 2;
+                ctx.strokeRect(room.x, room.y, room.w, room.h);
+                
+                ctx.fillStyle = "#fff";
+                ctx.font = "14px Arial";
+                ctx.fillText(room.name, room.x + 10, room.y + 25);
+            });
+            
+            // Коридоры
+            ctx.fillStyle = "#34495e";
+            ctx.fillRect(300, 250, 20, 180);
+            ctx.fillRect(300, 480, 400, 30);
+            
+            // Агенты
+            agents.forEach(agent => {
+                // Стол
+                ctx.fillStyle = "#5d4037";
+                ctx.fillRect(agent.desk.x - 30, agent.desk.y - 20, 60, 40);
+                ctx.fillStyle = "#2c3e50";
+                ctx.fillRect(agent.desk.x - 20, agent.desk.y - 35, 40, 30); // монитор
+                
+                // Агент
+                ctx.fillStyle = agent.color;
+                ctx.beginPath();
+                ctx.arc(agent.x, agent.y - 10, 15, 0, Math.PI*2);
+                ctx.fill();
+                
+                // Имя и статус
+                ctx.fillStyle = "#fff";
+                ctx.font = "bold 11px Arial";
+                ctx.fillText(agent.name, agent.x - 20, agent.y - 35);
+                
+                ctx.fillStyle = agent.state === 'working' ? '#4CAF50' : 
+                               agent.state === 'walking' ? '#FF9800' : '#9E9E9E';
+                ctx.font = "10px Arial";
+                let statusText = agent.state === 'working' ? '💻 ' + (agent.task ? agent.task.name.substring(0, 15) + '...' : 'работает') : 
+                                agent.state === 'walking' ? '🚶 идет' : '🟡 ожидает';
+                ctx.fillText(statusText, agent.x - 25, agent.y + 25);
+                
+                // Прогресс бар если работает
+                if (agent.state === 'working' && agent.task) {
+                    ctx.fillStyle = "#333";
+                    ctx.fillRect(agent.x - 25, agent.y + 32, 50, 6);
+                    ctx.fillStyle = "#4CAF50";
+                    ctx.fillRect(agent.x - 25, agent.y + 32, (agent.progress / 100) * 50, 6);
+                }
+                
+                // Аватар эмодзи
+                ctx.font = "20px Arial";
+                ctx.fillText(agent.avatar, agent.x - 10, agent.y - 5);
+                
+                // Анимация печатания
+                if (agent.state === 'working' && Math.random() < 0.3) {
+                    ctx.fillStyle = "rgba(76, 175, 80, 0.5)";
+                    ctx.fillRect(agent.desk.x - 10, agent.desk.y + 10, 5, 5);
+                }
+            });
+            
+            // Информация о проекте
+            ctx.fillStyle = "rgba(0,0,0,0.7)";
+            ctx.fillRect(10, 10, 200, 80);
+            ctx.fillStyle = "#fff";
+            ctx.font = "14px Arial";
+            ctx.fillText(`Файлов создано: ${projectFiles.length}`, 20, 30);
+            ctx.fillText(`Активных задач: ${agents.filter(a => a.state === 'working').length}`, 20, 50);
+            ctx.fillText(`Статус: ${sprintStarted ? (workPaused ? '⏸️ Пауза' : '▶️ Работаем') : '⏳ Ожидание'}`, 20, 70);
+        }
+
+        function loop() {
+            update();
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        // Инициализация
+        updateTaskList();
+        loop();
+    </script>
+</body>
+</html>

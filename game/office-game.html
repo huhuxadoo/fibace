@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>FiBace Office Simulator</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+    <style>
+        body { margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #1a1a2e; }
+        #game-container { border: 3px solid #4a4a6a; border-radius: 10px; }
+        .ui-overlay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: 'Courier New', monospace;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container"></div>
+    <div class="ui-overlay">
+        <h3>🏢 FiBace Office</h3>
+        <div id="agent-status">Загрузка...</div>
+    </div>
+
+    <script>
+        // Конфигурация агентов
+        const AGENTS = [
+            { name: "Арчи", role: "Архитектор", color: 0x9b59b6, x: 100, y: 100, desk: {x: 150, y: 150} },
+            { name: "Диззи", role: "UI/UX", color: 0xe74c3c, x: 300, y: 100, desk: {x: 350, y: 150} },
+            { name: "Федор", role: "Frontend", color: 0x3498db, x: 500, y: 100, desk: {x: 550, y: 150} },
+            { name: "Борис", role: "Backend", color: 0x2ecc71, x: 100, y: 300, desk: {x: 150, y: 350} },
+            { name: "Марк", role: "Mobile", color: 0xf39c12, x: 300, y: 300, desk: {x: 350, y: 350} },
+            { name: "Семен", role: "Security", color: 0xe74c3c, x: 500, y: 300, desk: {x: 550, y: 350} },
+            { name: "Павел", role: "Payments", color: 0x1abc9c, x: 200, y: 500, desk: {x: 250, y: 550} },
+            { name: "Тимофей", role: "QA", color: 0x95a5a6, x: 400, y: 500, desk: {x: 450, y: 550} }
+        ];
+
+        class OfficeScene extends Phaser.Scene {
+            constructor() {
+                super({ key: 'OfficeScene' });
+            }
+
+            create() {
+                // Создаем офис - комнаты
+                this.createRoom(50, 50, 250, 200, 0x2c3e50, "Архитектура"); // Верхняя левая
+                this.createRoom(320, 50, 250, 200, 0x2c3e50, "UI/UX"); // Верхняя средняя
+                this.createRoom(590, 50, 250, 200, 0x2c3e50, "Frontend"); // Верхняя правая
+                this.createRoom(50, 280, 250, 200, 0x2c3e50, "Backend"); // Средняя левая
+                this.createRoom(320, 280, 250, 200, 0x2c3e50, "DevOps"); // Средняя центр
+                this.createRoom(590, 280, 250, 200, 0x2c3e50, "Security"); // Средняя правая
+                this.createRoom(50, 510, 400, 150, 0x3a2a1e, "Кофе-зона ☕"); // Нижняя (кофе)
+                this.createRoom(470, 510, 370, 150, 0x2c3e50, "Тестирование"); // Нижняя правая
+
+                // Коридоры
+                this.add.rectangle(300, 250, 40, 200, 0x34495e).setOrigin(0.5);
+                this.add.rectangle(580, 250, 40, 200, 0x34495e).setOrigin(0.5);
+                this.add.rectangle(300, 480, 600, 40, 0x34495e).setOrigin(0.5);
+
+                // Столы и компьютеры
+                this.desks = [];
+                AGENTS.forEach((agent, index) => {
+                    const desk = this.createDesk(agent.desk.x, agent.desk.y, agent.color);
+                    this.desks.push(desk);
+                });
+
+                // Кофемашина
+                this.createCoffeeMachine(200, 580);
+
+                // Создаем агентов
+                this.agents = [];
+                AGENTS.forEach((agentData, index) => {
+                    const agent = this.createAgent(agentData);
+                    this.agents.push(agent);
+                });
+
+                // Запускаем ИИ поведение
+                this.time.addEvent({
+                    delay: 3000,
+                    callback: this.updateAgentBehavior,
+                    callbackScope: this,
+                    loop: true
+                });
+
+                // Обновляем UI
+                this.time.addEvent({
+                    delay: 1000,
+                    callback: this.updateUI,
+                    callbackScope: this,
+                    loop: true
+                });
+            }
+
+            createRoom(x, y, width, height, color, label) {
+                const room = this.add.rectangle(x + width/2, y + height/2, width, height, color);
+                room.setStrokeStyle(2, 0x4a4a6a);
+                
+                const text = this.add.text(x + width/2, y + 20, label, {
+                    fontSize: '14px',
+                    fill: '#ffffff',
+                    fontFamily: 'Arial'
+                }).setOrigin(0.5);
+            }
+
+            createDesk(x, y, color) {
+                const desk = this.add.rectangle(x, y, 60, 40, 0x8b4513);
+                desk.setStrokeStyle(2, 0x654321);
+                
+                // Компьютер
+                const monitor = this.add.rectangle(x, y - 15, 30, 20, 0x2c3e50);
+                monitor.setStrokeStyle(2, 0x000000);
+                
+                // Экран светится
+                this.add.rectangle(x, y - 15, 24, 14, 0x3498db).setAlpha(0.5);
+
+                // Стул
+                const chair = this.add.circle(x, y + 35, 12, 0x34495e);
+                
+                return { desk, monitor, chair, x, y, occupied: false };
+            }
+
+            createCoffeeMachine(x, y) {
+                // Корпус
+                this.add.rectangle(x, y, 40, 60, 0x2c3e50).setStrokeStyle(2, 0x000000);
+                // Кнопки
+                this.add.circle(x - 10, y - 15, 5, 0xe74c3c);
+                this.add.circle(x, y - 15, 5, 0xf39c12);
+                this.add.circle(x + 10, y - 15, 5, 0x2ecc71);
+                // Чашка
+                this.add.circle(x, y + 20, 8, 0xffffff).setStrokeStyle(1, 0x000000);
+                // Пар
+                this.add.circle(x, y - 40, 5, 0xffffff).setAlpha(0.3);
+                
+                this.coffeeMachine = { x, y, inUse: false };
+            }
+
+            createAgent(data) {
+                const container = this.add.container(data.x, data.y);
+                
+                // Тело (круг)
+                const body = this.add.circle(0, 0, 15, data.color);
+                body.setStrokeStyle(2, 0xffffff);
+                
+                // Имя над головой
+                const nameText = this.add.text(0, -25, data.name, {
+                    fontSize: '11px',
+                    fill: '#ffffff',
+                    backgroundColor: '#000000',
+                    padding: { x: 3, y: 1 }
+                }).setOrigin(0.5);
+                
+                // Прогресс-бар
+                const barBg = this.add.rectangle(0, 25, 40, 6, 0x000000);
+                const barFill = this.add.rectangle(-20, 25, 0, 6, 0x2ecc71);
+                barFill.setOrigin(0, 0.5);
+                
+                // Статус
+                const statusText = this.add.text(0, 35, '💻 Работает', {
+                    fontSize: '10px',
+                    fill: '#aaaaaa'
+                }).setOrigin(0.5);
+
+                container.add([body, nameText, barBg, barFill, statusText]);
+                
+                // Данные агента
+                container.agentData = {
+                    ...data,
+                    progress: Math.random() * 100,
+                    state: 'working', // working, walking, coffee, meeting
+                    targetX: data.desk.x,
+                    targetY: data.desk.y,
+                    barFill: barFill,
+                    statusText: statusText,
+                    body: body
+                };
+                
+                return container;
+            }
+
+            updateAgentBehavior() {
+                this.agents.forEach((agent, index) => {
+                    const data = agent.agentData;
+                    
+                    // Случайное поведение
+                    const rand = Math.random();
+                    
+                    if (rand < 0.3) {
+                        // Идет за кофе
+                        if (data.state !== 'coffee') {
+                            this.moveAgentTo(agent, 200 + Math.random() * 100, 550 + Math.random() * 50, 'coffee');
+                        }
+                    } else if (rand < 0.6) {
+                        // Возвращается за стол
+                        this.moveAgentTo(agent, data.desk.x + 30, data.desk.y, 'working');
+                    } else if (rand < 0.8) {
+                        // Идет к другому агенту (встреча)
+                        const other = this.agents[Math.floor(Math.random() * this.agents.length)];
+                        if (other !== agent) {
+                            this.moveAgentTo(agent, other.x + 40, other.y, 'meeting');
+                        }
+                    } else {
+                        // Работает
+                        data.state = 'working';
+                        data.statusText.setText('💻 Работает');
+                        data.progress = Math.min(100, data.progress + 5);
+                        data.barFill.width = (data.progress / 100) * 40;
+                        
+                        // Анимация печатания
+                        this.tweens.add({
+                            targets: agent,
+                            y: agent.y - 2,
+                            duration: 200,
+                            yoyo: true,
+                            repeat: 3
+                        });
+                    }
+                });
+            }
+
+            moveAgentTo(agent, targetX, targetY, state) {
+                const data = agent.agentData;
+                data.state = 'walking';
+                data.statusText.setText('🚶 Идет...');
+                
+                const distance = Phaser.Math.Distance.Between(agent.x, agent.y, targetX, targetY);
+                const duration = distance * 5; // Скорость ходьбы
+                
+                // Поворот в направление движения
+                const angle = Phaser.Math.Angle.Between(agent.x, agent.y, targetX, targetY);
+                
+                this.tweens.add({
+                    targets: agent,
+                    x: targetX,
+                    y: targetY,
+                    duration: duration,
+                    ease: 'Linear',
+                    onComplete: () => {
+                        data.state = state;
+                        if (state === 'working') {
+                            data.statusText.setText('💻 Работает');
+                            // Садится за стол (немного смещается)
+                            agent.y += 10;
+                        } else if (state === 'coffee') {
+                            data.statusText.setText('☕ Пьет кофе');
+                            // Анимация питья
+                            this.tweens.add({
+                                targets: agent,
+                                angle: 5,
+                                duration: 300,
+                                yoyo: true,
+                                repeat: 5
+                            });
+                            setTimeout(() => {
+                                this.moveAgentTo(agent, data.desk.x, data.desk.y, 'working');
+                            }, 4000);
+                        } else if (state === 'meeting') {
+                            data.statusText.setText('💬 Обсуждает');
+                            setTimeout(() => {
+                                this.moveAgentTo(agent, data.desk.x, data.desk.y, 'working');
+                            }, 3000);
+                        }
+                    }
+                });
+            }
+
+            updateUI() {
+                const statusDiv = document.getElementById('agent-status');
+                const working = this.agents.filter(a => a.agentData.state === 'working').length;
+                const coffee = this.agents.filter(a => a.agentData.state === 'coffee').length;
+                const avgProgress = Math.floor(this.agents.reduce((sum, a) => sum + a.agentData.progress, 0) / 8);
+                
+                statusDiv.innerHTML = `
+                    💻 Работают: ${working}<br>
+                    ☕ На кофе: ${coffee}<br>
+                    📊 Прогресс: ${avgProgress}%
+                `;
+            }
+        }
+
+        const config = {
+            type: Phaser.AUTO,
+            width: 900,
+            height: 700,
+            parent: 'game-container',
+            backgroundColor: '#1a1a2e',
+            scene: OfficeScene,
+            physics: {
+                default: 'arcade',
+                arcade: {
+                    gravity: { y: 0 }
+                }
+            }
+        };
+
+        const game = new Phaser.Game(config);
+    </script>
+</body>
+</html>

@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>FiBace Office - Команда</title>
+    <style>
+        body { 
+            margin: 0; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            min-height: 100vh; 
+            background: #1a1a2e; 
+            font-family: Arial, sans-serif;
+        }
+        #game-container { 
+            border: 3px solid #4a4a6a; 
+            border-radius: 10px; 
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+        .info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            background: rgba(0,0,0,0.8);
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="office" width="900" height="700"></canvas>
+    <div class="info">
+        <h3>🏢 Команда FiBace</h3>
+        <div id="status">Загрузка...</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('office');
+        const ctx = canvas.getContext('2d');
+        
+        // Уникальные персонажи
+        const agents = [
+            {
+                name: "Арчи",
+                role: "Архитектор",
+                color: "#9b59b6",
+                x: 150, y: 150,
+                deskX: 150, deskY: 150,
+                state: 'working',
+                progress: 45,
+                // Уникальные черты: борода, очки, планшет
+                draw: function(ctx, x, y, anim) {
+                    // Тело
+                    ctx.fillStyle = this.color;
+                    ctx.fillRect(x-15, y-10, 30, 40);
+                    // Голова
+                    ctx.fillStyle = "#f5d0b0"; // кожа
+                    ctx.beginPath(); ctx.arc(x, y-25, 18, 0, Math.PI*2); ctx.fill();
+                    // Борода
+                    ctx.fillStyle = "#4a4a4a";
+                    ctx.beginPath(); ctx.arc(x, y-22, 18, 0, Math.PI, false); ctx.fill();
+                    // Очки
+                    ctx.strokeStyle = "#333"; ctx.lineWidth = 2;
+                    ctx.strokeRect(x-12, y-28, 10, 6);
+                    ctx.strokeRect(x+2, y-28, 10, 6);
+                    ctx.beginPath(); ctx.moveTo(x-2, y-25); ctx.lineTo(x+2, y-25); ctx.stroke();
+                    // Планшет в руках
+                    if (this.state === 'working') {
+                        ctx.fillStyle = "#34495e";
+                        ctx.fillRect(x-10, y+5, 20, 15);
+                        ctx.fillStyle = "#ecf0f1";
+                        ctx.fillRect(x-8, y+7, 16, 11);
+                    }
+                    // Ноги (анимация ходьбы)
+                    if (this.state === 'walking') {
+                        const walk = Math.sin(anim * 0.1) * 5;
+                        ctx.fillStyle = "#2c3e50";
+                        ctx.fillRect(x-12, y+30, 8, 15 + walk);
+                        ctx.fillRect(x+4, y+30, 8, 15 - walk);
+                    } else {
+                        ctx.fillRect(x-12, y+30, 8, 15);
+                        ctx.fillRect(x+4, y+30, 8, 15);
+                    }
+                }
+            },
+            {
+                name: "Диззи",
+                role: "UI/UX",
+                color: "#e91e63",
+                x: 350, y: 150,
+                deskX: 350, deskY: 150,
+                state: 'working',
+                progress: 60,
+                // Уникальные черты: яркие волосы, наушники, макбук
+                draw: function(ctx, x, y, anim) {
+                    // Волосы (яркие)
+                    ctx.fillStyle = "#ff6b9d";
+                    ctx.beginPath(); ctx.arc(x, y-25, 20, 0, Math.PI*2); ctx.fill();
+                    // Лицо
+                    ctx.fillStyle = "#ffe0bd";
+                    ctx.beginPath(); ctx.arc(x, y-23, 15, 0, Math.PI*2); ctx.fill();
+                    // Тело
+                    ctx.fillStyle = this.color;
+                    ctx.fillRect(x-12, y-8, 24, 35);
+                    // Наушники
+                    ctx.fillStyle = "#333";
+                    ctx.fillRect(x-18, y-25, 6, 10);
+                    ctx.fillRect(x+12, y-25, 6, 10);
+                    // Макбук (серебристый)
+                    if (this.state === 'working') {
+                        ctx.fillStyle = "#c0c0c0";
+                        ctx.fillRect(x-15, y+5, 30, 20);
+                        ctx.fillStyle = "#fff";
+                        ctx.fillRect(x-13, y+7, 26, 14);
+                        // Яблочко
+                        ctx.fillStyle = "#333";
+                        ctx.beginPath(); ctx.arc(x, y+14, 3, 0, Math.PI*2); ctx.fill();
+                    }
+                    // Ноги
+                    if (this.state === 'walking') {
+                        const walk = Math.sin(anim * 0.1) * 5;
+                        ctx.fillStyle = "#333";
+                        ctx.fillRect(x-10, y+27, 6, 15 + walk);
+                        ctx.fillRect(x+4, y+27, 6, 15 - walk);
+                    } else {
+                        ctx.fillRect(x-10, y+27, 6, 15);
+                        ctx.fillRect(x+4, y+27, 6, 15);
+                    }
+                }
+            },
+            {
+                name: "Федор",
+                role: "Frontend",
+                color: "#3498db",
+                x: 550, y: 150,
+                deskX: 550, deskY: 150,
+                state: 'working',
+                progress: 25,
+                // Уникальные черты: капюшон, молодой, энергичный
+                draw: function(ctx, x, y, anim) {
+                    // Капюшон
+                    ctx.fillStyle = "#2980b9";
+                    ctx.beginPath(); ctx.arc(x, y-20, 20, 0, Math.PI*2); ctx.fill();
+                    // Лицо
+                    ctx.fillStyle = "#f5d0b0";
+                    ctx.beginPath(); ctx.arc(x, y-18, 14, 0, Math.PI*2); ctx.fill();
+                    // Глаза (бодрые)
+                    ctx.fillStyle = "#000";
+                    ctx.beginPath(); ctx.arc(x-5, y-20, 3, 0, Math.PI*2); ctx.fill();
+                    ctx.beginPath(); ctx.arc(x+5, y-20, 3, 0, Math.PI*2); ctx.fill();
+                    // Толстовка
+                    ctx.fillStyle = this.color;
+                    ctx.fillRect(x-14, y-5, 28, 32);
+                    // Капюшон (деталь)
+                    ctx.fillStyle = "#2471a3";
+                    ctx.fillRect(x-8, y-25, 16, 10);
+                    // Руки (активно печатает)
+                    if (this.state === 'working') {
+                        const type = Math.sin(anim * 0.2) * 3;
+                        ctx.fillStyle = "#f5d0b0";
+                        ctx.fillRect(x-20, y+10 + type, 8, 12);
+                        ctx.fillRect(x+12, y+10 - type, 8, 12);
+                    }
+                    // Ноги в джинсах
+                    ctx.fillStyle = "#2c3e50";
+                    if (this.state === 'walking') {
+                        const walk = Math.sin(anim * 0.1) * 6;
+                        ctx.fillRect(x-10, y+27, 7, 15 + walk);
+                        ctx.fillRect(x+3, y+27, 7, 15 - walk);
+                    } else {
+                        ctx.fillRect(x-10, y+27, 7, 15);
+                        ctx.fillRect(x+3, y+27, 7, 15);
+                    }
+                }
+            },
+            {
+                name: "Борис",
+                role: "Backend",
+                color: "#27ae60",
+                x: 150, y: 350,
+                deskX: 150, deskY: 350,
+                state: 'working',
+                progress: 30,
+                // Уникальные черты: борода, очки, серьезный, терминал
+                draw: function(ctx, x, y, anim) {
+                    // Голова
+                    ctx.fillStyle = "#f5d0b0";
+                    ctx.beginPath(); ctx.arc(x, y-25, 18, 0, Math.PI*2); ctx.fill();
+                    // Борода и усы
+                    ctx.fillStyle = "#2c3e50";
+                    ctx.beginPath(); ctx.arc(x, y-22, 19, 0, Math.PI, false); ctx.fill();
+                    // Усы
+                    ctx.fillRect(x-10, y-28, 20, 4);
+                    // Очки (квадратные)
+                    ctx.strokeStyle = "#000"; ctx.lineWidth = 2;
+                    ctx.fillStyle = "rgba(0,0,0,0.1)";
+                    ctx.fillRect(x-11, y-30, 10, 8); ctx.strokeRect(x-11, y-30, 10, 8);
+                    ctx.fillRect(x+1, y-30, 10, 8); ctx.strokeRect(x+1, y-30, 10, 8);
+                    // Рубашка
+                    ctx.fillStyle = "#ecf0f1";
+                    ctx.fillRect(x-15, y-10, 30, 38);
+                    ctx.fillStyle = this.color; // галстук
+                    ctx.fillRect(x-3, y-5, 6, 25);
+                    // Терминал (черный экран с зеленым кодом)
+                    if (this.state === 'working') {
+                        ctx.fillStyle = "#000";
+                        ctx.fillRect(x-12, y+5, 24, 18);
+                        ctx.fillStyle = "#0f0"; // код
+                        for(let i=0; i<3; i++) {
+                            ctx.fillRect(x-10, y+8+i*4, 16-i*3, 2);
+                        }
+                    }
+                    // Ноги
+                    ctx.fillStyle = "#34495e";
+                    if (this.state === 'walking') {
+                        const walk = Math.sin(anim * 0.1) * 4;
+                        ctx.fillRect(x-10, y+28, 7, 15 + walk);
+                        ctx.fillRect(x+3, y+28, 7, 15 - walk);
+                    } else {
+                        ctx.fillRect(x-10, y+28, 7, 15);
+                        ctx.fillRect(x+3, y+28, 7, 15);
+                    }
+                }
+            },
+            {
+                name: "Марк",
+                role: "Mobile",
+                color: "#f39c12",
+                x: 350, y: 350,
+                deskX: 350, deskY: 350,
+                state: 'coffee',
+                progress: 20,
+                // Уникальные черты: смартфон в руках всегда, кроссовки
+                draw: function(ctx, x, y, anim) {
+                    // Голова
+                    ctx.fillStyle = "#f5d0b0";
+                    ctx.beginPath(); ctx.arc(x, y-22, 16, 0, Math.PI*2); ctx.fill();
+                    // Волосы
+                    ctx.fillStyle = "#5d4037";
+                    ctx.beginPath(); ctx.arc(x, y-25, 17, Math.PI, 0); ctx.fill();
+                    // Тело
+                    ctx.fillStyle = this.color;
+                    ctx.fillRect(x-12, y-8, 24, 35);
+                    // Смартфон всегда в руке
+                    ctx.fillStyle = "#2c3e50";
+                    ctx.fillRect(x+8, y-5, 8, 14);
+                    ctx.fillStyle = "#3498db"; // экран
+                    ctx.fillRect(x+9, y-4, 6, 12);
+                    // Кроссовки (большие)
+                    ctx.fillStyle = "#e74c3c";
+                    if (this.state === 'walking') {
+                        const walk = Math.sin(anim * 0.15) * 5;
+                        ctx.fillRect(x-12, y+27 + walk, 10, 10);
+                        ctx.fillRect(x+2, y+27 - walk, 10, 10);
+                    } else {
+                        ctx.fillRect(x-12, y+27, 10, 8);
+                        ctx.fillRect(x+2, y+27, 10, 8);
+                    }
+                    // Рука со смартфоном
+                    if (this.state !== 'walking') {
+                        ctx.fillStyle = "#f5d0b0";
+                        ctx.fillRect(x+5, y+5, 8, 12);
+                    }
+                }
+            },
+            {
+                name: "Семен",
+                role: "Security",
+                color: "#c0392b",
+                x: 550, y: 350,
+                deskX: 550, deskY: 350,
+                state: 'working',
+                progress: 80,
+                // Уникальные черты: костюм, щит/замок, солидный
+                draw: function(ctx, x, y, anim) {
+                    // Голова (суровая)
+                    ctx.fillStyle = "#f5d0b0";
+                    ctx.beginPath(); ctx.arc(x, y-25, 17, 0, Math.PI*2); ctx.fill();
+                    // Глаза серьезные
+                    ctx.fillStyle = "#000";
+                    ctx.fillRect(x-8, y-28, 6, 3);
+                    ctx.fillRect(x+2, y-28, 6, 3);
+                    // Костюм темный
+                    ctx.fillStyle = "#2c3e50";
+                    ctx.fillRect(x-16, y-10, 32, 40);
+                    // Галстук красный
+                    ctx.fillStyle = this.color;
+                    ctx.beginPath(); ctx.moveTo(x, y-5); ctx.lineTo(x-5, y+25); ctx.lineTo(x+5, y+25); ctx.fill();
+                    // Значок щита на груди
+                    ctx.fillStyle = "#e74c3c";
+                    ctx.beginPath(); ctx.moveTo(x, y+5); ctx.lineTo(x-6, y+15); ctx.lineTo(x, y+20); ctx.lineTo(x+6, y+15); ctx.fill();
+                    // Если работает - держит планшет безопасности
+                    if (this.state === 'working') {
+                        ctx.fillStyle = "#34495e";
+                        ctx.fillRect(x-18, y+5, 36, 22);
+                        ctx.fillStyle = "#27ae60"; // зеленый экран "SECURE"
+                        ctx.fillRect(x-16, y+7, 32, 18);
+                        ctx.fillStyle = "#fff"; ctx.font = "10px Arial"; ctx.fillText("SEC", x-8, y+18);
+                    }
+                    // Ноги
+                    ctx.fillStyle = "#2c3e50";
+                    if (this.state === 'walking') {
+                        const walk = Math.sin(anim * 0.1) * 3;
+                        ctx.fillRect(x-10, y+30, 8, 15 + walk);
+                        ctx.fillRect(x+2, y+30, 8, 15 - walk);
+                    } else {
+                        ctx.fillRect(x-10, y+30, 8, 15);
+                        ctx.fillRect(x+2, y+30, 8, 15);
+                    }
+                }
+            },
+            {
+                name: "Павел",
+                role: "Payments",
+                color: "#1abc9c",
+                x: 200, y: 550,
+                deskX: 200, deskY: 550,
+                state: 'working',
+                progress: 75,
+                // Уникальные черты: костюм, кошелек/карта, деловой
+                draw: function(ctx, x, y, anim) {
+                    // Голова с улыбкой (считает деньги)
+                    ctx.fillStyle = "#f5d0b0";
+                    ctx.beginPath(); ctx.arc(x, y-25, 17, 0, Math.PI*2); ctx.fill();
+                    // Улыбка
+                    ctx.strokeStyle = "#000"; ctx.lineWidth = 2;
+                    ctx.beginPath(); ctx.arc(x, y-22, 10, 0, Math.PI, false); ctx.stroke();
+                    // Очки
+                    ctx.fillStyle = "rgba(0,0,0,0.1)";
+                    ctx.fillRect(x-12, y-30, 10, 6); ctx.fillRect(x+2, y-30, 10, 6);
+                    // Костюм бирюзовый
+                    ctx.fillStyle = this.color;
+                    ctx.fillRect(x-15, y-10, 30, 38);
+                    // Карман с золотым
+                    ctx.fillStyle = "#f1c40f";
+                    ctx.fillRect(x-10, y+5, 8, 6);
+                    // Денежные знаки $
+                    if (this.state === 'working') {
+                        ctx.fillStyle = "#f1c40f"; ctx.font = "bold 16px Arial";
+                        ctx.fillText("$", x+15, y+5);
+                        ctx.fillText("$", x-20, y+10);
+                        ctx.fillText("$", x+5, y-15);
+                    }
+                    // Ноги
+                    ctx.fillStyle = "#2c3e50";
+                    if (this.state === 'walking') {
+                        const walk = Math.sin(anim * 0.1) * 4;
+                        ctx.fillRect(x-10, y+28, 7, 15 + walk);
+                        ctx.fillRect(x+3, y+28, 7, 15 - walk);
+                    } else {
+                        ctx.fillRect(x-10, y+28, 7, 15);
+                        ctx.fillRect(x+3, y+28, 7, 15);
+                    }
+                }
+            },
+            {
+                name: "Тимофей",
+                role: "QA",
+                color: "#95a5a6",
+                x: 450, y: 550,
+                deskX: 450, deskY: 550,
+                state: 'working',
+                progress: 15,
+                // Уникальные черты: лупа, ищет баги, очки, внимательный
+                draw: function(ctx, x, y, anim) {
+                    // Голова с лупой (большие очки)
+                    ctx.fillStyle = "#f5d0b0";
+                    ctx.beginPath(); ctx.arc(x, y-25, 17, 0, Math.PI*2); ctx.fill();
+                    // Огромные очки как лупа
+                    ctx.fillStyle = "rgba(255,255,255,0.3)";
+                    ctx.strokeStyle = "#000"; ctx.lineWidth = 3;
+                    ctx.beginPath(); ctx.arc(x-6, y-25, 10, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                    ctx.beginPath(); ctx.arc(x+6, y-25, 10, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(x+4, y-25); ctx.lineTo(x-4, y-25); ctx.stroke();
+                    // Глаза сфокусированы
+                    ctx.fillStyle = "#000";
+                    ctx.fillRect(x-8, y-27, 4, 4);
+                    ctx.fillRect(x+4, y-27, 4, 4);
+                    // Костюм серый
+                    ctx.fillStyle = this.color;
+                    ctx.fillRect(x-14, y-8, 28, 36);
+                    // Лупа в руке (если ищет баги)
+                    if (this.state === 'working') {
+                        const search = Math.sin(anim * 0.1) * 2;
+                        ctx.strokeStyle = "#7f8c8d"; ctx.lineWidth = 3;
+                        ctx.beginPath(); ctx.arc(x+20, y+15 + search, 12, 0, Math.PI*2); ctx.stroke();
+                        ctx.beginPath(); ctx.moveTo(x+28, y+23 + search); ctx.lineTo(x+35, y+35 + search); ctx.stroke();
+                        // Баг (жук)
+                        ctx.fillStyle = "#e74c3c";
+                        ctx.beginPath(); ctx.arc(x+20, y+15 + search, 4, 0, Math.PI*2); ctx.fill();
+                    }
+                    // Ноги
+                    ctx.fillStyle = "#7f8c8d";
+                    if (this.state === 'walking') {
+                        const walk = Math.sin(anim * 0.1) * 5;
+                        ctx.fillRect(x-10, y+28, 7, 15 + walk);
+                        ctx.fillRect(x+3, y+28, 7, 15 - walk);
+                    } else {
+                        ctx.fillRect(x-10, y+28, 7, 15);
+                        ctx.fillRect(x+3, y+28, 7, 15);
+                    }
+                }
+            }
+        ];
+
+        // ИИ поведение
+        function updateAgents() {
+            agents.forEach(agent => {
+                const rand = Math.random();
+                
+                if (rand < 0.02) {
+                    // Идет к другому агенту
+                    const other = agents[Math.floor(Math.random() * agents.length)];
+                    if (other !== agent) {
+                        agent.targetX = other.x + 40;
+                        agent.targetY = other.y;
+                        agent.state = 'walking';
+                    }
+                } else if (rand < 0.05) {
+                    // Возвращается за стол
+                    agent.targetX = agent.deskX;
+                    agent.targetY = agent.deskY;
+                    agent.state = 'walking';
+                } else if (rand > 0.95) {
+                    // Начинает работать
+                    agent.state = 'working';
+                    agent.progress = Math.min(100, agent.progress + 1);
+                }
+                
+                // Движение
+                if (agent.state === 'walking') {
+                    const dx = agent.targetX - agent.x;
+                    const dy = agent.targetY - agent.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist > 2) {
+                        agent.x += (dx / dist) * 2;
+                        agent.y += (dy / dist) * 2;
+                    } else {
+                        agent.state = 'working';
+                    }
+                }
+            });
+        }
+
+        // Рисование сцены
+        function draw() {
+            // Фон
+            ctx.fillStyle = "#1a1a2e";
+            ctx.fillRect(0, 0, 900, 700);
+            
+            // Комнаты
+            ctx.fillStyle = "#2c3e50"; ctx.fillRect(50, 50, 250, 200); // Арх
+            ctx.fillStyle = "#2c3e50"; ctx.fillRect(320, 50, 250, 200); // UI
+            ctx.fillStyle = "#2c3e50"; ctx.fillRect(590, 50, 250, 200); // Front
+            ctx.fillStyle = "#2c3e50"; ctx.fillRect(50, 280, 250, 200); // Back
+            ctx.fillStyle = "#2c3e50"; ctx.fillRect(320, 280, 250, 200); // DevOps
+            ctx.fillStyle = "#2c3e50"; ctx.fillRect(590, 280, 250, 200); // Sec
+            ctx.fillStyle = "#3a2a1e"; ctx.fillRect(50, 510, 350, 150); // Кофе
+            ctx.fillStyle = "#2c3e50"; ctx.fillRect(420, 510, 420, 150); // QA
+            
+            // Коридоры
+            ctx.fillStyle = "#34495e"; ctx.fillRect(300, 250, 20, 200);
+            ctx.fillStyle = "#34495e"; ctx.fillRect(580, 250, 20, 200);
+            ctx.fillStyle = "#34495e"; ctx.fillRect(300, 480, 600, 30);
+            
+            // Подписи комнат
+            ctx.fillStyle = "#fff"; ctx.font = "14px Arial";
+            ctx.fillText("🏛️ Архитектура", 120, 80);
+            ctx.fillText("🎨 Дизайн", 400, 80);
+            ctx.fillText("💻 Frontend", 670, 80);
+            ctx.fillText("🖥️ Backend", 120, 310);
+            ctx.fillText("📱 Mobile", 400, 310);
+            ctx.fillText("🔒 Security", 670, 310);
+            ctx.fillText("☕ Кофе-зона", 180, 540);
+            ctx.fillText("🔍 QA & Тесты", 580, 540);
+            
+            // Агенты
+            const time = Date.now();
+            agents.forEach(agent => {
+                // Рисуем персонажа
+                agent.draw(ctx, agent.x, agent.y, time);
+                
+                // Имя и статус
+                ctx.fillStyle = "#fff"; ctx.font = "11px Arial";
+                ctx.fillText(agent.name, agent.x - 20, agent.y - 50);
+                ctx.fillStyle = "#aaa"; ctx.font = "9px Arial";
+                let status = agent.state === 'working' ? '💻 Работает' : 
+                            agent.state === 'walking' ? '🚶 Идет' : '☕ Кофе';
+                ctx.fillText(status, agent.x - 25, agent.y + 55);
+                
+                // Прогресс бар
+                ctx.fillStyle = "#333"; ctx.fillRect(agent.x - 20, agent.y + 60, 40, 6);
+                ctx.fillStyle = agent.color; 
+                ctx.fillRect(agent.x - 20, agent.y + 60, (agent.progress/100)*40, 6);
+            });
+            
+            // Обновление UI
+            const working = agents.filter(a => a.state === 'working').length;
+            document.getElementById('status').innerHTML = 
+                `💻 Работают: ${working}/8<br>` +
+                `📊 Средний прогресс: ${Math.floor(agents.reduce((s,a)=>s+a.progress,0)/8)}%`;
+        }
+
+        // Анимация
+        function loop() {
+            updateAgents();
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        // Старт
+        loop();
+    </script>
+</body>
+</html>

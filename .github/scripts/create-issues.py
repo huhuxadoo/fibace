@@ -1,58 +1,62 @@
 #!/usr/bin/env python3
 import os
-import requests
+import urllib.request
+import json
 
 def create_issue(title, body, labels):
-    """Создает Issue в GitHub"""
+    """Создает Issue в GitHub через API"""
     repo = os.environ.get('GITHUB_REPOSITORY')
     token = os.environ.get('GH_TOKEN')
     
     if not repo or not token:
-        print("No GitHub repo or token")
+        print("ℹ️  No GitHub repo or token - running locally")
         return
     
     url = f"https://api.github.com/repos/{repo}/issues"
-    headers = {
-        "Authorization": f"token {token}",
-        "Accept": "application/vnd.github.v3+json"
-    }
     
-    payload = {
+    payload = json.dumps({
         "title": f"[SECURITY BOT] {title}",
         "body": body,
         "labels": labels
+    }).encode('utf-8')
+    
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json",
+        "Content-Type": "application/json"
     }
     
-    response = requests.post(url, json=payload, headers=headers)
-    if response.status_code == 201:
-        print(f"✅ Created: {title}")
-    else:
-        print(f"❌ Failed: {response.text}")
+    req = urllib.request.Request(url, data=payload, headers=headers, method='POST')
+    
+    try:
+        with urllib.request.urlopen(req) as response:
+            if response.status == 201:
+                print(f"✅ Created issue: {title}")
+            else:
+                print(f"⚠️  Response: {response.status}")
+    except Exception as e:
+        print(f"❌ Failed: {e}")
 
 # Тестовый запуск
-print("🤖 Security bot script running!")
+print("🤖 Security bot script starting...")
 
-# Проверяем наличие реальных findings (в будущем)
-# Сейчас создаем тестовый issue для демонстрации
-
-if os.environ.get('GITHUB_REPOSITORY'):
-    create_issue(
-        title="Bot is ready for work",
-        body="""## 🤖 Security Bot Activated
+create_issue(
+    title="Bot is ready for work",
+    body="""## 🤖 Security Bot Activated
 
 Этот Issue создан автоматически для тестирования интеграции.
 
 **Что работает:**
 - ✅ GitHub Actions workflow
 - ✅ Автоматический запуск при push
-- ✅ Создание Issues через API
+- ✅ Создание Issues через API (urllib)
 
 **Следующий шаг:**
-Добавить ANTHROPIC_API_KEY в Secrets и запустить настоящий pentest!
+Запустить локально: `claude -> /pentest:pentest`
 
 ---
 *Created by security-bot workflow*""",
-        labels=['security', 'bot-test']
-    )
-else:
-    print("Running locally - no GitHub token")
+    labels=['security', 'bot-test']
+)
+
+print("✅ Script completed!")

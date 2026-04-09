@@ -12,39 +12,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Start test server
+      - name: Security check
         run: |
-          python3 -m http.server 3000 &
-          sleep 3
-          echo "Server running on port 3000"
+          echo "🤖 Security Bot Status:"
+          echo "✅ Repository: $GITHUB_REPOSITORY"
+          echo "✅ Commit: $GITHUB_SHA"
+          echo ""
+          echo "💡 Для запуска реального pentest:"
+          echo "   1. Запустите локально: claude -> /pentest:pentest"
+          echo "   2. Результаты сохранятся в outputs/"
+          echo "   3. Запушьте результаты: git add outputs/ && git push"
       
-      - name: Install Claude Code
-        run: |
-          curl -fsSL https://claude.ai/download/install.sh | bash
-          # Проверяем где установлено
-          ls -la $HOME/.claude/ || echo "Claude not in .claude"
-          which claude || echo "claude not in PATH"
-          # Добавляем в PATH для следующих шагов
-          echo "$HOME/.claude" >> $GITHUB_PATH
-          # Сохраняем путь для использования в этом шаге
-          export CLAUDE_PATH="$HOME/.claude"
-          echo "CLAUDE_PATH=$CLAUDE_PATH" >> $GITHUB_ENV
-      
-      - name: Install Pentest Plugin
-        run: |
-          export PATH="$HOME/.claude:$PATH"
-          claude plugin marketplace add Stickman230/claude-pentest
-          claude plugin install pentest@claude-pentest
-      
-      - name: Run Pentest Bot
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: |
-          export PATH="$HOME/.claude:$PATH"
-          echo "🤖 Security bot ready!"
-          claude --version || echo "Claude not found"
-      
-      - name: Create Issues from findings
+      - name: Create test issue
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
